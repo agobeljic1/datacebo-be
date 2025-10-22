@@ -173,3 +173,44 @@ curl -sS "$BASE/events?package_name=pkgA" -H "Authorization: Bearer $ADMIN_TOKEN
 # Filter by validity at log time (true/false)
 curl -sS "$BASE/events?valid=true" -H "Authorization: Bearer $ADMIN_TOKEN" | jq .
 ```
+
+## Usage Journeys
+
+- Admin sets up catalog and grants licenses
+  1) Register and bootstrap admin; login to obtain `ADMIN_TOKEN`.
+  2) Create base and add-on packages.
+  3) Create a license for a user with exactly one base plus optional add-ons.
+  4) Extend or revoke license as needed.
+  5) Deprecate packages; access listings automatically exclude deprecated.
+
+- User checks access and downloads
+  1) Register and login to obtain `USER_TOKEN`.
+  2) View accessible licenses and non-deprecated packages via `/me/licenses`.
+  3) A downstream downloader can validate the license key and query allowed packages.
+
+- Optional store purchase flow
+  - Users can top up balance and purchase base+add-on bundles via `/store/purchase`.
+  - Licenses are created per purchased bundle; expiration uses `license_days` or default.
+
+## Design Decisions & Trade-offs
+
+- Exactly one base requirement
+  - Enforced on license creation and package listing per license. Guarantees add-ons are only meaningful with a single base.
+
+- Deprecation behavior
+  - Deprecated packages are excluded from license package listings and `/me/licenses` by default. Licenses referencing deprecated packages remain in DB for audit; visibility is filtered.
+
+- Authorization model
+  - Admin-only for package and license management via `require_admin`. Users cannot grant themselves licenses directly (except via the optional store purchase flow, which deducts balance and validates inputs). This flow is included to demonstrate extensibility; it can be disabled or gated per requirements.
+
+- Validation semantics
+  - `POST /licenses/validate` returns validity and metadata (expiry, revocation reason). Package queries enforce validity (403 when invalid).
+
+- Schema simplicity
+  - A minimal schema with `packages`, `licenses`, `license_packages`, `users`, and optional `download_events`. This favors clarity and speed of development; can be evolved (e.g., add package versions, constraints, or license tiers).
+
+- Migrations
+  - Lightweight startup-time migrations for a couple of columns to keep local setup simple for SQLite; a dedicated migration tool (Alembic) would be preferable for production.
+
+- Event logging (bonus)
+  - Allows anonymous logging; stores whether provided license was valid at log time, plus IP, package name/version. Future: correlate to user from auth and enrich analytics.
