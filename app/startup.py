@@ -17,3 +17,9 @@ def register_startup(app: FastAPI) -> None:
                 if "is_deprecated" not in package_columns:
                     # SQLite/Postgres compatible boolean default
                     conn.execute(text("ALTER TABLE packages ADD COLUMN is_deprecated BOOLEAN NOT NULL DEFAULT 0"))
+            if "licenses" in inspector.get_table_names():
+                license_columns = {col["name"] for col in inspector.get_columns("licenses")}
+                if "revoked_at" not in license_columns:
+                    conn.execute(text("ALTER TABLE licenses ADD COLUMN revoked_at TIMESTAMP NULL"))
+                if "revoked_reason" not in license_columns:
+                    conn.execute(text("ALTER TABLE licenses ADD COLUMN revoked_reason VARCHAR(255) NULL"))

@@ -33,3 +33,6 @@ class LicenseOut(BaseModel):
     package_ids: List[int]
     expires_at: datetime
 
+    class Config:
+        from_attributes = True
+
