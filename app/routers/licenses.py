@@ -1,8 +1,9 @@
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
+import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.settings import settings
 from app.db.session import get_db
@@ -18,14 +19,18 @@ from app.schemas.license import (
     LicensePackagesResponse,
     LicenseRecord,
 )
-from app.security.deps import get_current_user, require_admin
+from app.security.deps import require_admin
 
 
 router = APIRouter()
 
 
-def _license_to_record(db: Session, lic: License) -> LicenseRecord:
-    package_ids = [lp.package_id for lp in db.query(LicensePackage).filter(LicensePackage.license_id == lic.id).all()]
+def _utcnow() -> datetime:
+    return datetime.now(tz=timezone.utc)
+
+
+def _license_to_record(lic: License) -> LicenseRecord:
+    package_ids = [p.id for p in getattr(lic, "packages", [])]
     return LicenseRecord(
         id=lic.id,
         key=lic.key,
@@ -47,8 +52,13 @@ def create_license(
     if not user:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid user_id")
 
-    packages = db.query(Package).filter(Package.id.in_(payload.package_ids), Package.is_deprecated == False).all()
-    if len(packages) != len(payload.package_ids):
+    unique_package_ids = list({pid for pid in payload.package_ids})
+    packages = (
+        db.query(Package)
+        .filter(Package.id.in_(unique_package_ids), Package.is_deprecated == False)
+        .all()
+    )
+    if len(packages) != len(unique_package_ids):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or deprecated package id(s)")
 
     base_count = sum(1 for p in packages if p.is_base)
@@ -56,26 +66,22 @@ def create_license(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Exactly one base package is required")
 
     days = payload.license_days or settings.license_default_days
-    expires_at = datetime.now(tz=timezone.utc) + timedelta(days=days)
+    expires_at = _utcnow() + timedelta(days=days)
 
-    lic = License(user_id=user.id, key=None, expires_at=expires_at)  # key filled below
-    import secrets
-    lic.key = secrets.token_urlsafe(32)
+    lic = License(user_id=user.id, key=secrets.token_urlsafe(32), expires_at=expires_at)
+    # Use relationship to manage association rows efficiently
+    lic.packages = packages
     db.add(lic)
     db.commit()
     db.refresh(lic)
 
-    for p in packages:
-        db.add(LicensePackage(license_id=lic.id, package_id=p.id))
-    db.commit()
-
-    return _license_to_record(db, lic)
+    return _license_to_record(lic)
 
 
 @router.get("/", response_model=List[LicenseRecord])
 def list_licenses(_: User = Depends(require_admin), db: Session = Depends(get_db)) -> List[LicenseRecord]:
-    licenses = db.query(License).all()
-    return [_license_to_record(db, lic) for lic in licenses]
+    licenses = db.query(License).options(joinedload(License.packages)).all()
+    return [_license_to_record(lic) for lic in licenses]
 
 
 @router.post("/{license_id}/revoke", response_model=LicenseRecord)
@@ -89,13 +95,13 @@ def revoke_license(
     if not lic:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="License not found")
     if lic.revoked_at:
-        return _license_to_record(db, lic)
-    lic.revoked_at = datetime.now(tz=timezone.utc)
+        return _license_to_record(lic)
+    lic.revoked_at = _utcnow()
     lic.revoked_reason = payload.reason
     db.add(lic)
     db.commit()
     db.refresh(lic)
-    return _license_to_record(db, lic)
+    return _license_to_record(lic)
 
 
 @router.post("/{license_id}/extend", response_model=LicenseRecord)
@@ -112,7 +118,7 @@ def extend_license(
     db.add(lic)
     db.commit()
     db.refresh(lic)
-    return _license_to_record(db, lic)
+    return _license_to_record(lic)
 
 
 @router.post("/validate", response_model=LicenseValidateResponse)
@@ -120,7 +126,7 @@ def validate_license(payload: LicenseValidateRequest, db: Session = Depends(get_
     lic: Optional[License] = db.query(License).filter(License.key == payload.key).first()
     if not lic:
         return LicenseValidateResponse(valid=False)
-    now = datetime.now(tz=timezone.utc)
+    now = _utcnow()
     if lic.revoked_at is not None:
         return LicenseValidateResponse(valid=False, expires_at=lic.expires_at, revoked_at=lic.revoked_at, reason=lic.revoked_reason)
     if lic.expires_at <= now:
@@ -130,16 +136,13 @@ def validate_license(payload: LicenseValidateRequest, db: Session = Depends(get_
 
 @router.post("/packages", response_model=LicensePackagesResponse)
 def license_packages(payload: LicensePackagesRequest, db: Session = Depends(get_db)) -> LicensePackagesResponse:
-    lic: Optional[License] = db.query(License).filter(License.key == payload.key).first()
+    lic: Optional[License] = (
+        db.query(License).options(joinedload(License.packages)).filter(License.key == payload.key).first()
+    )
     if not lic:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="License not found")
     # Must have exactly one base in current license to access add-ons
-    packages = (
-        db.query(Package)
-        .join(LicensePackage, LicensePackage.package_id == Package.id)
-        .filter(LicensePackage.license_id == lic.id, Package.is_deprecated == False)
-        .all()
-    )
+    packages = [p for p in lic.packages if p.is_deprecated == False]
     base_count = sum(1 for p in packages if p.is_base)
     if base_count != 1:
         # Only return base if invalid add-on configuration
