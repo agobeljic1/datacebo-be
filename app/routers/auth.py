@@ -7,7 +7,11 @@ from sqlalchemy.orm import Session
 from app.core.settings import settings
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.auth import RegisterRequest, LoginRequest, TokenResponse
+from app.schemas.auth import (
+    RegisterRequest,
+    LoginRequest,
+    TokenResponse,
+)
 from app.security.passwords import hash_password, verify_password
 from app.security.jwt_tokens import (
     create_access_token,
@@ -94,6 +98,9 @@ def refresh_token(
     _set_refresh_cookie(response, new_refresh)
 
     return TokenResponse(access_token=access)
+
+
+
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
