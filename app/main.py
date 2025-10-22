@@ -8,6 +8,7 @@ from app.routers.store import router as store_router
 from app.routers.licenses import router as licenses_router
 from app.routers.me import router as me_router
 from app.routers.users import router as users_router
+from app.routers.events import router as events_router
 from app.startup import register_startup
 
 app = FastAPI(title=settings.app_name)
@@ -21,6 +22,7 @@ app.include_router(store_router, prefix="/store", tags=["store"])
 app.include_router(licenses_router, prefix="/licenses", tags=["licenses"]) 
 app.include_router(me_router, tags=["me"]) 
 app.include_router(users_router, tags=["users"]) 
+app.include_router(events_router, tags=["events"]) 
 
 
 @app.get("/health")
