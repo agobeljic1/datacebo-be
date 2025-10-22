@@ -98,6 +98,12 @@ def test_calculate_expiry_respects_days_and_default():
     after = datetime.now(tz=timezone.utc)
     assert before + timedelta(days=settings.license_default_days) <= dt3 <= after + timedelta(days=settings.license_default_days, seconds=1)
 
+    # negative falls back to default
+    before = datetime.now(tz=timezone.utc)
+    dt4 = calculate_expiry(-5)
+    after = datetime.now(tz=timezone.utc)
+    assert before + timedelta(days=settings.license_default_days) <= dt4 <= after + timedelta(days=settings.license_default_days, seconds=1)
+
 
 def test_charge_and_create_licenses_happy_path_and_insufficient_balance():
     db = SessionLocal()
@@ -149,6 +155,54 @@ def test_charge_and_create_licenses_happy_path_and_insufficient_balance():
         assert ei.value.status_code == status.HTTP_402_PAYMENT_REQUIRED
         # Ensure no license created for poor user
         assert db.query(License).filter(License.user_id == poor.id).count() == 0
+    finally:
+        db.close()
+
+
+def test_validate_and_price_items_deduplicates_addons_and_sums_price_once():
+    db = SessionLocal()
+    try:
+        base, addon1, _ = seed_packages(db)
+        items = [PurchaseItem(base_package_id=base.id, addon_package_ids=[addon1.id, addon1.id, addon1.id])]
+        validated, total = validate_and_price_items(db, items)
+        assert len(validated) == 1
+        vbase, vaddons = validated[0]
+        assert vbase.id == base.id
+        assert [a.id for a in vaddons] == [addon1.id]
+        assert total == base.price + addon1.price
+    finally:
+        db.close()
+
+
+def test_charge_and_create_licenses_multiple_items_creates_multiple_licenses_and_deducts_total():
+    db = SessionLocal()
+    try:
+        base, addon1, addon2 = seed_packages(db)
+        user = User(email="multi@example.com", hashed_password="x", balance=10_000)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        items = [
+            PurchaseItem(base_package_id=base.id, addon_package_ids=[addon1.id]),
+            PurchaseItem(base_package_id=base.id, addon_package_ids=[addon2.id]),
+        ]
+        validated, total = validate_and_price_items(db, items)
+        expires_at = datetime.now(tz=timezone.utc) + timedelta(days=1)
+
+        created = charge_and_create_licenses(
+            db=db,
+            user_id=user.id,
+            validated_items=validated,
+            expires_at=expires_at,
+            total_price=total,
+        )
+        assert len(created) == 2
+        # Balance reduced appropriately
+        user_after = db.query(User).filter(User.id == user.id).one()
+        assert user_after.balance == 10_000 - total
+        # Verify two licenses exist
+        assert db.query(License).filter(License.user_id == user.id).count() == 2
     finally:
         db.close()
 
