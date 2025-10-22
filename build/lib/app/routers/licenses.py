@@ -42,14 +42,6 @@ def _license_to_record(lic: License) -> LicenseRecord:
     )
 
 
-def _to_aware_utc(dt: Optional[datetime]) -> Optional[datetime]:
-    if dt is None:
-        return None
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
-
-
 @router.post("/", response_model=LicenseRecord, status_code=status.HTTP_201_CREATED)
 def create_license(
     payload: LicenseCreateRequest,
@@ -135,13 +127,11 @@ def validate_license(payload: LicenseValidateRequest, db: Session = Depends(get_
     if not lic:
         return LicenseValidateResponse(valid=False)
     now = _utcnow()
-    expires_at = _to_aware_utc(lic.expires_at)
-    revoked_at = _to_aware_utc(lic.revoked_at)
-    if revoked_at is not None:
-        return LicenseValidateResponse(valid=False, expires_at=expires_at, revoked_at=revoked_at, reason=lic.revoked_reason)
-    if expires_at <= now:
-        return LicenseValidateResponse(valid=False, expires_at=expires_at)
-    return LicenseValidateResponse(valid=True, expires_at=expires_at)
+    if lic.revoked_at is not None:
+        return LicenseValidateResponse(valid=False, expires_at=lic.expires_at, revoked_at=lic.revoked_at, reason=lic.revoked_reason)
+    if lic.expires_at <= now:
+        return LicenseValidateResponse(valid=False, expires_at=lic.expires_at)
+    return LicenseValidateResponse(valid=True, expires_at=lic.expires_at)
 
 
 @router.post("/packages", response_model=LicensePackagesResponse)
@@ -153,9 +143,7 @@ def license_packages(payload: LicensePackagesRequest, db: Session = Depends(get_
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="License not found")
     # Enforce that only valid (not revoked, not expired) licenses can access packages
     now = _utcnow()
-    expires_at = _to_aware_utc(lic.expires_at)
-    revoked_at = _to_aware_utc(lic.revoked_at)
-    if revoked_at is not None or expires_at <= now:
+    if lic.revoked_at is not None or lic.expires_at <= now:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="License not valid")
     # Must have exactly one base in current license to access add-ons
     packages = [p for p in lic.packages if p.is_deprecated == False]
@@ -176,9 +164,7 @@ def license_packages_get(license_key: str, db: Session = Depends(get_db)) -> Lic
     if not lic:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="License not found")
     now = _utcnow()
-    expires_at = _to_aware_utc(lic.expires_at)
-    revoked_at = _to_aware_utc(lic.revoked_at)
-    if revoked_at is not None or expires_at <= now:
+    if lic.revoked_at is not None or lic.expires_at <= now:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="License not valid")
     packages = [p for p in lic.packages if p.is_deprecated == False]
     base_count = sum(1 for p in packages if p.is_base)

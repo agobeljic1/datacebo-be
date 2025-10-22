@@ -71,10 +71,7 @@ def charge_and_create_licenses(
 ) -> List[LicenseOut]:
     created: List[LicenseOut] = []
 
-    # Allow operation both when a transaction is already active (e.g., after prior reads)
-    # and when not. Use a nested transaction if one is already in progress.
-    txn_ctx = db.begin_nested() if db.in_transaction() else db.begin()
-    with txn_ctx:
+    with db.begin():
         user_locked = (
             db.query(User)
             .filter(User.id == user_id)

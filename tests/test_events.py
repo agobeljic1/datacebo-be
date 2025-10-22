@@ -7,7 +7,7 @@ from app.db.session import Base, engine
 def auth_headers(client: TestClient, email: str, password: str) -> dict:
     r = client.post("/auth/register", json={"email": email, "password": password})
     assert r.status_code == 201
-    return {"Authorization": f"Bearer {r.json()["access_token"]}"}
+    return {"Authorization": f"Bearer {r.json()['access_token']}"}
 
 
 def make_admin(client: TestClient, headers: dict) -> None:
