@@ -2,6 +2,40 @@
 
 FastAPI app with SQLite, Pydantic v2, and pytest.
 
+## Requirements
+
+- Python 3.11+
+- pip and venv (recommended)
+- SQLite 3 (bundled with Python on most systems)
+- Optional: `jq` for parsing JSON in cURL examples
+
+Environment variables (override defaults in a `.env` file at repo root):
+
+```env
+# Security (set strong secrets in non-dev)
+ACCESS_TOKEN_SECRET=dev-access-secret-change-me
+REFRESH_TOKEN_SECRET=dev-refresh-secret-change-me
+JWT_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRES_MINUTES=15
+REFRESH_TOKEN_EXPIRES_DAYS=7
+
+# App
+APP_NAME=Datacebo API
+DEBUG=false
+
+# Database (default SQLite file)
+DATABASE_URL=sqlite:///./app.db
+
+# Cookies
+REFRESH_COOKIE_NAME=refresh_token
+REFRESH_COOKIE_PATH=/auth/refresh
+REFRESH_COOKIE_SECURE=false
+REFRESH_COOKIE_SAMESITE=lax
+
+# Licensing
+LICENSE_DEFAULT_DAYS=30
+```
+
 ## Install
 
 Create a venv and install deps:
