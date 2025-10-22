@@ -24,5 +24,8 @@ class Settings(BaseSettings):
     refresh_cookie_secure: bool = False
     refresh_cookie_samesite: str = "lax"
 
+    # Licensing
+    license_default_days: int = 30
+
 
 settings = Settings()
