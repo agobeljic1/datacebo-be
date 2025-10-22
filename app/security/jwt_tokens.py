@@ -1,5 +1,5 @@
 import datetime as dt
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import jwt
 
@@ -10,7 +10,7 @@ def _utc_now() -> dt.datetime:
     return dt.datetime.now(tz=dt.timezone.utc)
 
 
-def create_access_token(subject: str) -> str:
+def create_access_token(subject: str, role: Optional[str] = None) -> str:
     expires = _utc_now() + dt.timedelta(minutes=settings.access_token_expires_minutes)
     payload: Dict[str, Any] = {
         "sub": subject,
@@ -18,6 +18,8 @@ def create_access_token(subject: str) -> str:
         "exp": expires,
         "iat": _utc_now(),
     }
+    if role is not None:
+        payload["role"] = role
     return jwt.encode(payload, settings.access_token_secret, algorithm=settings.jwt_algorithm)
 
 

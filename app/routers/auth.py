@@ -44,7 +44,7 @@ def register(payload: RegisterRequest, response: Response, db: Session = Depends
     db.commit()
     db.refresh(user)
 
-    access = create_access_token(subject=str(user.id))
+    access = create_access_token(subject=str(user.id), role=user.role)
     refresh = create_refresh_token(subject=str(user.id))
     _set_refresh_cookie(response, refresh)
 
@@ -57,7 +57,7 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
     if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
-    access = create_access_token(subject=str(user.id))
+    access = create_access_token(subject=str(user.id), role=user.role)
     refresh = create_refresh_token(subject=str(user.id))
     _set_refresh_cookie(response, refresh)
 
@@ -65,7 +65,11 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
 
 
 @router.post("/refresh", response_model=TokenResponse)
-def refresh_token(response: Response, refresh_token: Optional[str] = Cookie(default=None, alias=settings.refresh_cookie_name)) -> TokenResponse:
+def refresh_token(
+    response: Response,
+    refresh_token: Optional[str] = Cookie(default=None, alias=settings.refresh_cookie_name),
+    db: Session = Depends(get_db),
+) -> TokenResponse:
     if not refresh_token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing refresh token")
 
@@ -79,7 +83,11 @@ def refresh_token(response: Response, refresh_token: Optional[str] = Cookie(defa
 
     user_id = payload["sub"]
 
-    access = create_access_token(subject=str(user_id))
+    # fetch user to include current role in token
+    user: Optional[User] = db.query(User).filter(User.id == int(user_id)).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+    access = create_access_token(subject=str(user_id), role=user.role)
 
     # Rotate refresh token
     new_refresh = create_refresh_token(subject=str(user_id))
