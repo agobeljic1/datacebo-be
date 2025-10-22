@@ -63,6 +63,10 @@ pytest
 - Swagger UI: `http://localhost:8000/docs`
 - ReDoc: `http://localhost:8000/redoc`
 
+## Database Schema
+
+![Database schema](erd-diagram.png)
+
 ## Quick cURL setup
 
 ```bash
