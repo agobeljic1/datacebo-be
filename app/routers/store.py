@@ -22,14 +22,33 @@ def purchase_packages(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> LicenseOut:
-    base_pkg = db.query(Package).filter(Package.id == payload.base_package_id, Package.is_base == True).first()  # noqa: E712
+    base_pkg = (
+        db.query(Package)
+        .filter(
+            Package.id == payload.base_package_id,
+            Package.is_base == True, 
+            Package.is_deprecated == False, 
+        )
+        .first()
+    )
     if not base_pkg:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid base package")
     addon_pkgs = []
     if payload.addon_package_ids:
-        addon_pkgs = db.query(Package).filter(Package.id.in_(payload.addon_package_ids), Package.is_base == False).all()  # noqa: E712
+        addon_pkgs = (
+            db.query(Package)
+            .filter(
+                Package.id.in_(payload.addon_package_ids),
+                Package.is_base == False,   
+                Package.is_deprecated == False,
+            )
+            .all()
+        )
         if len(addon_pkgs) != len(payload.addon_package_ids):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid add-on package id(s)")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or deprecated add-on package id(s)",
+            )
 
     total_price = base_pkg.price + sum(p.price for p in addon_pkgs)
     if current_user.balance < total_price:

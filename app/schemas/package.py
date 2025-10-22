@@ -8,6 +8,7 @@ class PackageCreate(BaseModel):
     name: str
     is_base: bool
     price: int = Field(ge=0)
+    is_deprecated: bool = False
 
 
 class PackageOut(BaseModel):
@@ -15,6 +16,7 @@ class PackageOut(BaseModel):
     name: str
     is_base: bool
     price: int
+    is_deprecated: bool
 
     class Config:
         from_attributes = True

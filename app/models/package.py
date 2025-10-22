@@ -12,6 +12,8 @@ class Package(Base):
     # True for base package, False for add-on
     is_base = Column(Boolean, nullable=False, default=False)
     price = Column(Integer, nullable=False)
+    # When true, the package is no longer available for new licenses
+    is_deprecated = Column(Boolean, nullable=False, default=False, server_default="0")
 
 
 class License(Base):
