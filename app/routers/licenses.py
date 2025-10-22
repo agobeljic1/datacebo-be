@@ -141,6 +141,10 @@ def license_packages(payload: LicensePackagesRequest, db: Session = Depends(get_
     )
     if not lic:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="License not found")
+    # Enforce that only valid (not revoked, not expired) licenses can access packages
+    now = _utcnow()
+    if lic.revoked_at is not None or lic.expires_at <= now:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="License not valid")
     # Must have exactly one base in current license to access add-ons
     packages = [p for p in lic.packages if p.is_deprecated == False]
     base_count = sum(1 for p in packages if p.is_base)
