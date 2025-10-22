@@ -51,3 +51,16 @@ class LicenseRecord(BaseModel):
         from_attributes = True
 
 
+
+class LicenseMyRecord(BaseModel):
+    id: int
+    key: str
+    expires_at: datetime
+    revoked_at: Optional[datetime] = None
+    revoked_reason: Optional[str] = None
+    package_names: List[str]
+
+    class Config:
+        from_attributes = True
+
+

@@ -1,4 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
+from typing import Literal
 
 
 class RegisterRequest(BaseModel):
@@ -13,3 +14,18 @@ class LoginRequest(BaseModel):
 
 class TokenResponse(BaseModel):
     access_token: str
+
+
+class UserOut(BaseModel):
+    id: int
+    email: EmailStr
+    role: Literal["user", "admin"]
+    balance: int
+
+    class Config:
+        from_attributes = True
+
+
+class UpdateUserRoleRequest(BaseModel):
+    role: Literal["user", "admin"]
+

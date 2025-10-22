@@ -8,9 +8,7 @@ from app.models.package import Package
 from app.schemas.package import PackageCreate, PackageOut
 from app.security.deps import require_admin
 
-
 router = APIRouter()
-
 
 @router.get("/", response_model=List[PackageOut])
 def list_packages(include_deprecated: bool = False, db: Session = Depends(get_db)) -> List[PackageOut]:

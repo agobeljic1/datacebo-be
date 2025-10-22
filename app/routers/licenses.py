@@ -155,3 +155,21 @@ def license_packages(payload: LicensePackagesRequest, db: Session = Depends(get_
     return LicensePackagesResponse(key=lic.key, package_names=names)
 
 
+
+@router.get("/{license_key}/packages", response_model=LicensePackagesResponse)
+def license_packages_get(license_key: str, db: Session = Depends(get_db)) -> LicensePackagesResponse:
+    lic: Optional[License] = (
+        db.query(License).options(joinedload(License.packages)).filter(License.key == license_key).first()
+    )
+    if not lic:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="License not found")
+    now = _utcnow()
+    if lic.revoked_at is not None or lic.expires_at <= now:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="License not valid")
+    packages = [p for p in lic.packages if p.is_deprecated == False]
+    base_count = sum(1 for p in packages if p.is_base)
+    if base_count != 1:
+        packages = [p for p in packages if p.is_base]
+    names = [p.name for p in packages]
+    return LicensePackagesResponse(key=lic.key, package_names=names)
+

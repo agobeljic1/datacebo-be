@@ -22,9 +22,13 @@ class PackageOut(BaseModel):
         from_attributes = True
 
 
-class PurchaseRequest(BaseModel):
+class PurchaseItem(BaseModel):
     base_package_id: int
     addon_package_ids: List[int] = []
+
+
+class PurchaseRequest(BaseModel):
+    items: List[PurchaseItem] = Field(min_items=1)
     license_days: Optional[int] = None
 
 
